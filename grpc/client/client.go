@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/pborman/uuid"
 	"github.com/shitingbao/heartbeat/grpc/heart"
 
 	"google.golang.org/grpc"
@@ -13,53 +14,113 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// const port = "localhost:4399"
+const (
+	defaultClientDuration = time.Second * 5
+)
 
-// 客户端拦截器
-func Clientinterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+type HeartClient struct {
+	ID      string
+	Address string
+	D       time.Duration
+	Opts    []grpc.DialOption
+	Cancel  context.CancelFunc
+	Ctx     context.Context
+	gconn   *grpc.ClientConn
+}
+
+type Option func(*option)
+
+type option struct {
+	Address string
+	D       time.Duration
+	Opts    []grpc.DialOption
+}
+
+func clientinterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	start := time.Now()
 	err := invoker(ctx, method, req, reply, cc, opts...)
 	log.Printf("method == %s ; req == %v ; rep == %v ; duration == %s ; error == %v\n", method, req, reply, time.Since(start), err)
 	return err
 }
 
-func DefaultDialOption() []grpc.DialOption {
+func defaultDialOption() []grpc.DialOption {
 	opts := []grpc.DialOption{}
-	opts = append(opts, grpc.WithUnaryInterceptor(Clientinterceptor))
-	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials())) // 另一种简单操作
+	opts = append(opts, grpc.WithUnaryInterceptor(clientinterceptor))
+	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	return opts
 }
 
-func startConnect(port string, opts []grpc.DialOption) {
-	conn, err := grpc.Dial(port, opts...)
+func NewGrpcHeartClient(ctx context.Context, opts ...Option) *HeartClient {
+	o := &option{
+		D:    defaultClientDuration,
+		Opts: defaultDialOption(),
+	}
+	for _, opt := range opts {
+		opt(o)
+	}
+	c, cal := context.WithCancel(ctx)
+	conn, err := grpc.Dial(o.Address, o.Opts...)
 	if err != nil {
 		panic(err)
 	}
-	// defer conn.Close()
-	c := heart.NewHeartServerClient(conn) //新建client
 
-	if err := startHeartBeat(c); err != nil {
-		log.Println("startHeartBeat:", err)
+	return &HeartClient{
+		ID:     uuid.New(),
+		D:      o.D,
+		Cancel: cal,
+		Ctx:    c,
+		gconn:  conn,
+	}
+}
+
+func WithDialAddress(address string) Option {
+	return func(o *option) {
+		o.Address = address
+	}
+}
+
+func WithDialDuration(d time.Duration) Option {
+	return func(o *option) {
+		o.D = d
+	}
+}
+
+func WithGrpcDialOption(opts []grpc.DialOption) Option {
+	return func(o *option) {
+		o.Opts = opts
+	}
+}
+
+func (h *HeartClient) Dial() {
+	cli := heart.NewHeartServerClient(h.gconn)
+	if err := h.startHeartBeat(cli); err != nil {
+		log.Println(err)
 		return
 	}
 }
 
-func startHeartBeat(c heart.HeartServerClient) error {
+func (h *HeartClient) startHeartBeat(c heart.HeartServerClient) error {
 	cli, err := c.HeartBeat(context.Background())
 	if err != nil {
 		return err
 	}
-	tm := time.NewTicker(time.Second * 5)
+	tm := time.NewTicker(h.D)
 	defer tm.Stop()
 	for {
 		select {
 		case <-tm.C:
 			if err := cli.Send(&heart.Heart{
-				Id: "1",
+				Id: h.ID,
 			}); err != nil {
 				return err
 			}
+		case <-h.Ctx.Done():
+			h.gconn.Close()
+			return nil
 		}
 	}
+}
 
+func (h *HeartClient) GetID() string {
+	return h.ID
 }

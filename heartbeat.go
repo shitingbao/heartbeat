@@ -2,7 +2,7 @@ package heartbeat
 
 type HeartHub interface {
 	Listen()
-	Dial()
+	// Dial(address string, opts ...grpc.DialOption)
 	Reboot()
 	Endless()
 }

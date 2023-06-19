@@ -15,5 +15,3 @@ message Result {
 service HeartServer{
     rpc HeartBeat(stream Heart)returns(Result){}
 }
-
-
