@@ -1,0 +1,19 @@
+syntax="proto3";
+
+package heart;
+
+option go_package = "github.com/shitingbao/heartbeat/grpc/heart;heart";
+
+message Heart {
+    string id = 1;
+}
+
+message Result {
+    string content = 1;
+}
+
+service HeartServer{
+    rpc HeartBeat(stream Heart)returns(Result){}
+}
+
+
