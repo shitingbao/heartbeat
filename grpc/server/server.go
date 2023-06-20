@@ -1,9 +1,10 @@
-package grpc
+package server
 
 import (
 	"context"
 	"log"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/shitingbao/heartbeat"
@@ -19,34 +20,30 @@ const (
 )
 
 // GrpcHeart
-// Duration   time interval
+// Port       example ":4300", with a colon
+// Duration   default heart time interval
 // Dead       death signal
-// Port       :4300, with a colon
+// UserHub    data hub
+// listen     useing net.TCPListener
+// wg		  Used to ensure that the old process does not stop until all connections of the old process exit
 // createTime automatically retains the creation time
 // isEndless  Whether to restart seamlessly
-// isReConnect  whether to reconnect
 type GrpcHeart struct {
 	*heart.UnimplementedHeartServerServer
 
-	Port             string
-	Duration         time.Duration
-	Dead             chan int
-	UserHub          *core.Hub
+	Port     string
+	Duration time.Duration
+	Dead     chan int
+	UserHub  core.Hub
+
+	listen net.Listener
+	wg     *sync.WaitGroup
+
 	isEndless        bool
-	isReConnect      bool
 	createTime       time.Time
 	grpcServerOption []grpc.ServerOption
+	callback         func(string, []byte)
 }
-
-type Option struct {
-	Duration         time.Duration
-	IsEndless        bool
-	Port             string
-	IsReConnect      bool
-	GrpcServerOption []grpc.ServerOption
-}
-
-type GrpcHeartOption func(*Option)
 
 func unaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	start := time.Now()
@@ -62,76 +59,53 @@ func defaultGrpcOptions() []grpc.ServerOption {
 	return opts
 }
 
-func WithDuration(d time.Duration) GrpcHeartOption {
-	return func(o *Option) {
-		o.Duration = d
-	}
-}
-
-func WithIsEndless(isEndless bool) GrpcHeartOption {
-	return func(o *Option) {
-		o.IsEndless = isEndless
-	}
-}
-
-func WithListenPort(port string) GrpcHeartOption {
-	return func(o *Option) {
-		o.Port = port
-	}
-}
-
-func WithReConnect(isReConncet bool) GrpcHeartOption {
-	return func(o *Option) {
-		o.IsReConnect = isReConncet
-	}
-}
-
-func WithGrpcOption(opts []grpc.ServerOption) GrpcHeartOption {
-	return func(o *Option) {
-		o.GrpcServerOption = opts
-	}
-}
-
+// NewGrpcHeart
 func NewGrpcHeart(opts ...GrpcHeartOption) heartbeat.HeartHub {
 	o := &Option{
 		Duration:         defaultHeartDuration,
 		IsEndless:        defaultIsEndless,
 		Port:             defaultPort,
 		GrpcServerOption: defaultGrpcOptions(),
+		UserHub:          core.NewDefaultHub(),
+		Callback:         func(string, []byte) {},
 	}
 	for _, opt := range opts {
 		opt(o)
 	}
 	return &GrpcHeart{
-		Duration:    o.Duration,
-		Dead:        make(chan int, 1),
-		Port:        o.Port,
-		UserHub:     core.NewHub(),
-		createTime:  time.Now(),
-		isEndless:   o.IsEndless,
-		isReConnect: o.IsReConnect,
+		Duration:   o.Duration,
+		Dead:       make(chan int, 1),
+		Port:       o.Port,
+		wg:         &sync.WaitGroup{},
+		createTime: time.Now(),
+		isEndless:  o.IsEndless,
 	}
 }
 
 func (g *GrpcHeart) Listen() {
-	g.ServerLoad()
+	if g.isEndless {
+		g.endlessTcpRegisterAndListen()
+	} else {
+		g.serverLoad()
+	}
 }
 
 func (g *GrpcHeart) Reboot()  {}
 func (g *GrpcHeart) Endless() {}
 
-func (g *GrpcHeart) ServerLoad() error {
-	lis, err := net.Listen("tcp", g.Port)
-	if err != nil {
-		return err
-	}
+func (g *GrpcHeart) serverLoad() error {
+	// lis, err := net.Listen("tcp", g.Port)
+	// if err != nil {
+	// 	return err
+	// }
 
 	s := grpc.NewServer(g.grpcServerOption...)
 	heart.RegisterHeartServerServer(s, g)
-	return s.Serve(lis)
+	return s.Serve(g.listen)
 }
 
 // HeartBeat
+// Implemented grpc method
 func (s *GrpcHeart) HeartBeat(cli heart.HeartServer_HeartBeatServer) error {
 	sid := ""
 
@@ -141,9 +115,9 @@ func (s *GrpcHeart) HeartBeat(cli heart.HeartServer_HeartBeatServer) error {
 			s.UserHub.DeleteData(sid)
 			return err
 		}
+		s.callback(res.Id, res.Message)
 		sid = res.Id
 		s.UserHub.PutData(sid)
-		log.Println(res.Id)
 	}
 }
 

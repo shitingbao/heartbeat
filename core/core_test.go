@@ -10,7 +10,7 @@ func TestPutData(t *testing.T) {
 }
 
 func BenchmarkPutData(b *testing.B) {
-	UserHub := NewHub()
+	UserHub := NewDefaultHub()
 	go func() {
 		for i := 0; i < b.N; i++ {
 			UserHub.PutData(strconv.Itoa(i))

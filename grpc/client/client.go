@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	defaultClientDuration = time.Second * 5
+	defaultClientDuration = time.Second * 2
 )
 
 type HeartClient struct {
@@ -26,14 +26,6 @@ type HeartClient struct {
 	Cancel  context.CancelFunc
 	Ctx     context.Context
 	gconn   *grpc.ClientConn
-}
-
-type Option func(*option)
-
-type option struct {
-	Address string
-	D       time.Duration
-	Opts    []grpc.DialOption
 }
 
 func clientinterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
@@ -70,24 +62,6 @@ func NewGrpcHeartClient(ctx context.Context, opts ...Option) *HeartClient {
 		Cancel: cal,
 		Ctx:    c,
 		gconn:  conn,
-	}
-}
-
-func WithDialAddress(address string) Option {
-	return func(o *option) {
-		o.Address = address
-	}
-}
-
-func WithDialDuration(d time.Duration) Option {
-	return func(o *option) {
-		o.D = d
-	}
-}
-
-func WithGrpcDialOption(opts []grpc.DialOption) Option {
-	return func(o *option) {
-		o.Opts = opts
 	}
 }
 
