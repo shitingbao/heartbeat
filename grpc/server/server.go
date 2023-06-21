@@ -73,12 +73,15 @@ func NewGrpcHeart(opts ...GrpcHeartOption) heartbeat.HeartHub {
 		opt(o)
 	}
 	return &GrpcHeart{
-		Duration:   o.Duration,
-		Dead:       make(chan int, 1),
-		Port:       o.Port,
-		wg:         &sync.WaitGroup{},
-		createTime: time.Now(),
-		isEndless:  o.IsEndless,
+		Port:             o.Port,
+		Duration:         o.Duration,
+		Dead:             make(chan int, 1),
+		UserHub:          o.UserHub,
+		wg:               &sync.WaitGroup{},
+		createTime:       time.Now(),
+		grpcServerOption: o.GrpcServerOption,
+		isEndless:        o.IsEndless,
+		callback:         o.Callback,
 	}
 }
 
@@ -86,21 +89,19 @@ func (g *GrpcHeart) Listen() {
 	if g.isEndless {
 		g.endlessTcpRegisterAndListen()
 	} else {
+		lis, err := net.Listen("tcp", g.Port)
+		if err != nil {
+			panic(err)
+		}
+		g.listen = lis
 		g.serverLoad()
 	}
 }
 
-func (g *GrpcHeart) Reboot()  {}
-func (g *GrpcHeart) Endless() {}
-
 func (g *GrpcHeart) serverLoad() error {
-	// lis, err := net.Listen("tcp", g.Port)
-	// if err != nil {
-	// 	return err
-	// }
-
 	s := grpc.NewServer(g.grpcServerOption...)
 	heart.RegisterHeartServerServer(s, g)
+	log.Println("start listen:", g.Port)
 	return s.Serve(g.listen)
 }
 

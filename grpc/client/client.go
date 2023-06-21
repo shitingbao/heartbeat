@@ -16,6 +16,7 @@ import (
 
 const (
 	defaultClientDuration = time.Second * 2
+	defaultAddress        = "127.0.0.1:4399"
 )
 
 type HeartClient struct {
@@ -26,6 +27,7 @@ type HeartClient struct {
 	Cancel  context.CancelFunc
 	Ctx     context.Context
 	gconn   *grpc.ClientConn
+	mes     []byte
 }
 
 func clientinterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
@@ -44,8 +46,9 @@ func defaultDialOption() []grpc.DialOption {
 
 func NewGrpcHeartClient(ctx context.Context, opts ...Option) *HeartClient {
 	o := &option{
-		D:    defaultClientDuration,
-		Opts: defaultDialOption(),
+		Address: defaultAddress,
+		D:       defaultClientDuration,
+		Opts:    defaultDialOption(),
 	}
 	for _, opt := range opts {
 		opt(o)
@@ -84,7 +87,8 @@ func (h *HeartClient) startHeartBeat(c heart.HeartServerClient) error {
 		select {
 		case <-tm.C:
 			if err := cli.Send(&heart.Heart{
-				Id: h.ID,
+				Id:      h.ID,
+				Message: h.mes,
 			}); err != nil {
 				return err
 			}
@@ -97,4 +101,10 @@ func (h *HeartClient) startHeartBeat(c heart.HeartServerClient) error {
 
 func (h *HeartClient) GetID() string {
 	return h.ID
+}
+
+// SetMes 设置心跳包额外信息
+// 不建议包太大，影响单次包大小
+func (h *HeartClient) SetMes(mes []byte) {
+	h.mes = mes
 }

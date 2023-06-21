@@ -9,6 +9,7 @@ import (
 func main() {
 
 	h := server.NewGrpcHeart(
+		// server.WithIsEndless(true),
 		server.WithCallback(callback),
 	)
 	h.Listen()
