@@ -107,18 +107,22 @@ func (g *GrpcHeart) serverLoad() error {
 
 // HeartBeat
 // Implemented grpc method
-func (s *GrpcHeart) HeartBeat(cli heart.HeartServer_HeartBeatServer) error {
+func (g *GrpcHeart) HeartBeat(cli heart.HeartServer_HeartBeatServer) error {
 	sid := ""
+	g.wg.Add(1)
+	defer func() {
+		g.wg.Done()
 
+	}()
 	for {
 		res, err := cli.Recv()
 		if err != nil {
-			s.UserHub.DeleteData(sid)
+			g.UserHub.DeleteData(sid)
 			return err
 		}
-		s.callback(res.Id, res.Message)
+		g.callback(res.Id, res.Message)
 		sid = res.Id
-		s.UserHub.PutData(sid)
+		g.UserHub.PutData(sid)
 	}
 }
 
