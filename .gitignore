@@ -19,3 +19,7 @@
 
 # Go workspace file
 go.work
+
+example/grpc/server/stbserver
+
+example/grpc/client/stbclient
