@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"log"
 
 	"github.com/shitingbao/heartbeat/grpc/client"
 	"google.golang.org/grpc"
@@ -15,7 +16,10 @@ func main() {
 		client.WithGrpcDialOption([]grpc.DialOption{
 			grpc.WithTransportCredentials(alts.NewClientCreds(alts.DefaultClientOptions())),
 		}))
-	b, _ := json.Marshal("hello")
+	b, err := json.Marshal("hello")
+	if err != nil {
+		log.Println("json marsh==:", err)
+	}
 	cli.SetMes(b)
 	cli.Dial()
 }
