@@ -23,6 +23,7 @@ func (e *GrpcHeart) endlessTcpRegisterAndListen() error {
 		return err
 	}
 	if *argReload {
+		log.Println("start reload server")
 		// why newfile 3
 		// here -》 https://github.com/shitingbao/endless#readme in bottom
 		f := os.NewFile(3, "")

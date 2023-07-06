@@ -87,7 +87,9 @@ func NewGrpcHeart(opts ...GrpcHeartOption) heartbeat.HeartHub {
 
 func (g *GrpcHeart) Listen() {
 	if g.isEndless {
-		g.endlessTcpRegisterAndListen()
+		if err := g.endlessTcpRegisterAndListen(); err != nil {
+			log.Println("reload server err:", err)
+		}
 	} else {
 		lis, err := net.Listen("tcp", g.Port)
 		if err != nil {
