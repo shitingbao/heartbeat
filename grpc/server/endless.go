@@ -72,6 +72,9 @@ func (e *GrpcHeart) signalHandler() {
 // then start it
 // be careful not use cmd.Run(),it will block
 func (e *GrpcHeart) reload() error {
+	defer e.listen.Close()
+	// 待定 可能需要 close 父进程的 listen 不然父进程和子进程一起接受连接
+	// 但是 close 时，子进程如果还没开始监听，就会丢失连接
 	f, err := e.listen.(*net.TCPListener).File()
 	if err != nil {
 		return err
