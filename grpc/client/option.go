@@ -28,6 +28,9 @@ func WithDialDuration(d time.Duration) Option {
 
 func WithGrpcDialOption(opts []grpc.DialOption) Option {
 	return func(o *option) {
+		if len(opts) == 0 {
+			return
+		}
 		o.Opts = opts
 	}
 }

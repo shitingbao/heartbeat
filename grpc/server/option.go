@@ -38,6 +38,9 @@ func WithListenPort(port string) GrpcHeartOption {
 
 func WithGrpcOption(opts []grpc.ServerOption) GrpcHeartOption {
 	return func(o *Option) {
+		if len(opts) == 0 {
+			return
+		}
 		o.GrpcServerOption = opts
 	}
 }

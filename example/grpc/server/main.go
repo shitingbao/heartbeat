@@ -4,8 +4,6 @@ import (
 	"log"
 
 	"github.com/shitingbao/heartbeat/grpc/server"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/alts"
 )
 
 func main() {
@@ -13,9 +11,9 @@ func main() {
 	h := server.NewGrpcHeart(
 		server.WithIsEndless(true),
 		server.WithCallback(callback),
-		server.WithGrpcOption([]grpc.ServerOption{
-			grpc.Creds(alts.NewServerCreds(alts.DefaultServerOptions())),
-		}),
+		// server.WithGrpcOption([]grpc.ServerOption{
+		// 	grpc.Creds(alts.NewServerCreds(alts.DefaultServerOptions())),
+		// }),
 	)
 	h.Listen()
 }
