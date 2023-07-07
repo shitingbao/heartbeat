@@ -5,7 +5,6 @@
 package server
 
 import (
-	"encoding/json"
 	"flag"
 	"log"
 	"net"
@@ -14,6 +13,9 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
+
+	"github.com/shitingbao/heartbeat/core"
 )
 
 var (
@@ -22,15 +24,16 @@ var (
 	defaultAddress = ":8080"
 )
 
-type conflag map[string]net.Conn
-
 type EndlessTcp struct {
 	address    string
 	listen     net.Listener
 	wg         *sync.WaitGroup // 该标识标记了父进程的退出逻辑，在进程 listen 的时候 add，并且在信号接收的地方 wait ，在连接全部断开的时候 done，这样连接全部断开的时候，就自动退出了父进程
 	readLength int
-	conflags   conflag
-	// 注意 conflags 这个升级过后的内容，两个进程是不共用的，比如原进程连接有五个，升级过后的有10个连接，输出长度分别是5和10.而不是都是15
+	conflags   sync.Map
+	UserHub    core.Hub
+
+	Duration time.Duration
+	callBack func()
 }
 
 // default adress is ":8080"
@@ -39,7 +42,7 @@ func New(ads ...string) *EndlessTcp {
 		address:    defaultAddress,
 		wg:         &sync.WaitGroup{},
 		readLength: 256,
-		conflags:   make(map[string]net.Conn),
+		conflags:   sync.Map{},
 	}
 	if len(ads) > 0 {
 		e.address = ads[0]
@@ -90,7 +93,7 @@ func (e *EndlessTcp) listenAccept(u UpgradeRead) {
 			log.Println("Accept:", err)
 			return
 		}
-		e.conflags[con.RemoteAddr().String()] = con
+		e.conflags.Store(con.RemoteAddr().String(), con)
 		e.wg.Add(1)
 		e.handle(con, u)
 	}
@@ -99,7 +102,7 @@ func (e *EndlessTcp) listenAccept(u UpgradeRead) {
 // read write 方法待定
 func (e *EndlessTcp) handle(con net.Conn, u UpgradeRead) {
 	go e.read(con, u)
-	// go e.write(con)
+	go e.write(con)
 }
 
 func (e *EndlessTcp) read(con net.Conn, u UpgradeRead) {
@@ -108,33 +111,35 @@ func (e *EndlessTcp) read(con net.Conn, u UpgradeRead) {
 		n, err := con.Read(result)
 		if err != nil {
 			e.wg.Done()
-			delete(e.conflags, con.RemoteAddr().String())
-			log.Println("断开 con，当前：", len(e.conflags))
+			adr := con.RemoteAddr().String()
+			e.conflags.Delete(adr)
+
+			log.Println("断开 address:", adr)
 			return
 		}
 		u.ReadMessage(&ReadMes{
 			N:   n,
 			Mes: result,
 		})
+		e.callBack()
 	}
 }
 
-func (e *EndlessTcp) Write(v interface{}) (int, error) {
-	for _, con := range e.GetCons() {
-		b, err := json.Marshal(v)
-		if err != nil {
-			return -1, err
-		}
-		n, err := con.Write(b)
-		if err != nil {
-			return n, err
+func (e *EndlessTcp) write(con net.Conn) error {
+	t := time.NewTicker(e.Duration)
+	defer t.Stop()
+	for {
+		select {
+		case <-t.C:
+			e.conflags.Range(func(_ any, v any) bool {
+				cn, ok := v.(net.Conn)
+				if ok {
+					cn.Write([]byte("1"))
+				}
+				return true
+			})
 		}
 	}
-	return 0, nil
-}
-
-func (e *EndlessTcp) GetCons() conflag {
-	return e.conflags
 }
 
 // 信号处理

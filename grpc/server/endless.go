@@ -16,9 +16,9 @@ var (
 )
 
 // EndlessTcpRegisterAndListen
-func (e *GrpcHeart) endlessTcpRegisterAndListen() error {
+func (g *GrpcHeart) endlessTcpRegisterAndListen() error {
 	flag.Parse()
-	add, err := net.ResolveTCPAddr("tcp4", e.Port)
+	add, err := net.ResolveTCPAddr("tcp4", g.Port)
 	if err != nil {
 		return err
 	}
@@ -31,24 +31,24 @@ func (e *GrpcHeart) endlessTcpRegisterAndListen() error {
 		if err != nil {
 			return err
 		}
-		e.listen = l
+		g.listen = l
 	} else {
 		l, err := net.ListenTCP("tcp", add)
 		if err != nil {
 			return err
 		}
-		e.listen = l
+		g.listen = l
 	}
 
-	go e.serverLoad()
-	e.signalHandler()
+	go g.serverLoad()
+	g.signalHandler()
 	return nil
 }
 
 // signalHandler
 // When a signal is received, perform different actions
 // When syscall.SIGUSR2 come in，start reload
-func (e *GrpcHeart) signalHandler() {
+func (g *GrpcHeart) signalHandler() {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM, syscall.SIGUSR2)
 	for {
@@ -58,10 +58,10 @@ func (e *GrpcHeart) signalHandler() {
 			signal.Stop(ch)
 			return
 		case syscall.SIGUSR2:
-			if err := e.reload(); err != nil {
+			if err := g.reload(); err != nil {
 				log.Fatalf("restart error: %v", err)
 			}
-			e.wg.Wait()
+			g.wg.Wait()
 			return
 		}
 	}
@@ -71,11 +71,11 @@ func (e *GrpcHeart) signalHandler() {
 // Save current net and standard information（in，out and err）
 // then start it
 // be careful not use cmd.Run(),it will block
-func (e *GrpcHeart) reload() error {
-	defer e.listen.Close()
+func (g *GrpcHeart) reload() error {
+	defer g.listen.Close()
 	// 待定 可能需要 close 父进程的 listen 不然父进程和子进程一起接受连接
 	// 但是 close 时，子进程如果还没开始监听，就会丢失连接
-	f, err := e.listen.(*net.TCPListener).File()
+	f, err := g.listen.(*net.TCPListener).File()
 	if err != nil {
 		return err
 	}

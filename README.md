@@ -1,10 +1,10 @@
 # heartbeat
 
-heart is jumping
+一个基于 grpc 的普通心跳测试，支持无缝重启
 
 # Example progress
 
-$ go build //修改代码后，重新构建出 stbserver
+$ go build -o stbserver //修改代码后，重新构建出 stbserver
 $ ps -ef | grep "stbserver\|PID" // 找到正在运行的 stbserver 对应进程号，比如是进程号是： 31088
 $ kill -SIGUSR2 31088 // 向 31088 进程发送一个 SIGUSR2 信号，如果有连接，就会显示如下：
 501 31021 27220 0 3:09 下午 ttys001 0:00.09 ./stbserver
